@@ -1,0 +1,14 @@
+# Python / Backend
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.requirenments.txt
+
+# Frontend
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+frontend/build/

@@ -2,9 +2,10 @@ import os
 import json
 import redis
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlmodel import Session
+from sqlmodel import Session, select
 from uuid import UUID
 from typing import Dict, Any
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 from pydantic import BaseModel
 from ..database import get_session
@@ -45,6 +46,7 @@ def submit_form(
         # Convert dicts back into Pydantic models for validation
         schema = [FormField(**field) for field in form_dict["structure"]]
         form_org_id = form_dict["organization_id"]
+        form_is_active = form_dict.get("is_active", False)
         
     else:
         form = session.get(Form, payload.form_id)
@@ -54,17 +56,30 @@ def submit_form(
         # FIX 1: Convert SQLAlchemy's dicts into Pydantic models for validation
         schema = [FormField(**field) for field in form.structure]
         form_org_id = str(form.organization_id)
+        form_is_active = form.is_active
         
         # FIX 2: form.structure is ALREADY a list of dicts, no model_dump() needed!
         cache_payload = {
             "structure": form.structure, 
-            "organization_id": form_org_id
+            "organization_id": form_org_id,
+            "is_active": form_is_active,
         }
         redis_client.setex(cache_key, 600, json.dumps(cache_payload))
 
     # 2. THE SECURITY BOUNDARY
     if form_org_id != str(current_user.organization_id):
         raise HTTPException(status_code=403, detail="Form not found within your organization")
+    if not form_is_active:
+        raise HTTPException(status_code=409, detail="This form is no longer accepting submissions")
+
+    existing_submission = session.exec(
+        select(FormSubmission).where(
+            FormSubmission.form_id == payload.form_id,
+            FormSubmission.submitted_by_user_id == current_user.id,
+        )
+    ).first()
+    if existing_submission:
+        raise HTTPException(status_code=409, detail="You have already submitted this form")
 
     # 3. THE RUNTIME ENGINE
     validate_submission_data(schema=schema, answers=payload.answers)
@@ -72,10 +87,15 @@ def submit_form(
     # 4. SAVE THE SUBMISSION
     db_submission = FormSubmission(
         form_id=payload.form_id,
-        answers=payload.answers
+        answers=payload.answers,
+        submitted_by_user_id=current_user.id,
     )
     session.add(db_submission)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="You have already submitted this form")
     session.refresh(db_submission)
     
     # 5. REAL-TIME BROADCAST
@@ -90,6 +110,26 @@ def submit_form(
     sync_redis.publish(channel_name, json.dumps(event_payload))
     
     return db_submission
+
+
+@router.get("/forms/{form_id}/my-status")
+def get_my_submission_status(
+    form_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return whether the current user may still submit this tenant form."""
+    form = session.get(Form, form_id)
+    if not form or form.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    has_submitted = session.exec(
+        select(FormSubmission.id).where(
+            FormSubmission.form_id == form_id,
+            FormSubmission.submitted_by_user_id == current_user.id,
+        )
+    ).first() is not None
+    return {"has_submitted": has_submitted, "is_active": form.is_active}
 
 class UpdateSubmissionRequest(BaseModel):
     answers: Dict[str, Any]

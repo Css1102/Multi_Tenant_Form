@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+@layer base {
+  * { @apply border-slate-200; }
+  body { @apply m-0 bg-slate-50 antialiased; }
+  button { @apply cursor-pointer; }
+}
+
+@layer components {
+  .button-primary { @apply inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-violet-200 transition hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-100; }
+  .nav-link { @apply inline-flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900; }
+  .nav-link-active { @apply bg-violet-50 text-violet-700 hover:bg-violet-50 hover:text-violet-700; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.14em] text-violet-600; }
+  .section-title { @apply mt-1 text-2xl font-semibold tracking-tight text-slate-900; }
+  .input { @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100; }
+  .label { @apply text-sm font-medium text-slate-700; }
+  .question-count { @apply rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500; }
+  .card-action { @apply inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700; }
+  .card-action-muted { @apply rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100; }
+}
