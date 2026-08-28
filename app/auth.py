@@ -1,11 +1,10 @@
 import jwt
 from datetime import datetime, timedelta, timezone
 from pwdlib import PasswordHash
-
-# In production, NEVER hardcode this. Load it from a .env file.
-SECRET_KEY = "your-super-secret-development-key-do-not-share"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+import os
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES",30)
 
 # Initialize Argon2 password hasher
 password_hash = PasswordHash.recommended()
