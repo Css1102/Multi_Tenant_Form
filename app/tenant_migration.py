@@ -93,6 +93,7 @@ def normalize_tenants(session: Session) -> None:
     session.commit()
 
     session.exec(text("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS role VARCHAR NOT NULL DEFAULT 'member'"))
+    session.exec(text("ALTER TABLE fileattachment ADD COLUMN IF NOT EXISTS field_id VARCHAR"))
     # Preserve existing access by selecting one deterministic owner per tenant.
     session.exec(
         text(

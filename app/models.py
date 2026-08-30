@@ -70,6 +70,7 @@ class FormSubmission(SQLModel, table=True):
 class FileAttachment(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     submission_id: UUID = Field(foreign_key="formsubmission.id", index=True)
+    field_id: Optional[str] = Field(default=None, index=True)
     
     # Store the safe, obfuscated path where the file is actually located
     storage_path: str = Field(unique=True) 

@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..dependencies import get_current_user
-from ..models import Form, FormField, FormSubmission, User
+from ..models import FileAttachment, Form, FormField, FormSubmission, User
 
 router = APIRouter(prefix="/exports", tags=["Exports"])
 
@@ -52,11 +52,15 @@ def export_form_submissions(
     writer.writerow(["Submission ID", "Submitted At", *[field.label for field in fields]])
 
     for submission in submissions:
+        attachments = session.exec(
+            select(FileAttachment).where(FileAttachment.submission_id == submission.id)
+        ).all()
+        attachment_names = {attachment.field_id: attachment.original_filename for attachment in attachments}
         writer.writerow(
             [
                 str(submission.id),
                 submission.created_at.isoformat(),
-                *[_csv_value(submission.answers.get(field.id)) for field in fields],
+                *[attachment_names.get(field.id, _csv_value(submission.answers.get(field.id))) for field in fields],
             ]
         )
 

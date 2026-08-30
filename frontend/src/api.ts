@@ -8,9 +8,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   })
+  console.log(response)
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { detail?: string }
-    throw new Error(body.detail ?? 'Something went wrong. Please try again.')
+    const body = await response.json().catch(() => ({})) as { detail?: string | Array<{ msg?: string }> }
+    const message = Array.isArray(body.detail) ? body.detail.map(error => error.msg ?? 'Invalid value').join(' ') : body.detail
+    throw new Error(message ?? 'Something went wrong. Please try again.')
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
@@ -44,8 +46,10 @@ export const api = {
     URL.revokeObjectURL(url)
   },
   submit: (form_id: string, answers: Record<string, unknown>) => request<Submission>('/submissions/', { method: 'POST', body: JSON.stringify({ form_id, answers }) }),
-  upload: async (submissionId: string, file: File) => {
-    const body = new FormData(); body.append('file', file)
+  upload: async (submissionId: string, fieldId: string | File, maybeFile?: File) => {
+    const file = fieldId instanceof File ? fieldId : maybeFile!
+    const resolvedFieldId = typeof fieldId === 'string' ? fieldId : 'attachment'
+    const body = new FormData(); body.append('file', file); body.append('field_id', resolvedFieldId)
     const response = await fetch(`${API_URL}/files/upload/${submissionId}`, { method: 'POST', credentials: 'include', body })
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail ?? 'Upload failed.')
     return response.json() as Promise<{ message: string; file_id: string }>
