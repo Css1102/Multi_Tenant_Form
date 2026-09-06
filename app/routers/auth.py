@@ -114,12 +114,11 @@ def login(
     response.set_cookie(
         key="access_token",
         value=f"Bearer {access_token}",
-        httponly=True,  
-        secure=False,   
-        samesite="lax", 
-        max_age=1800    
-    )
-    
+        httponly=True,
+        secure=True,       
+        samesite="none",    
+        max_age=1800
+    )    
     return {"message": "Successfully logged in"}
 
 @router.post("/logout")
