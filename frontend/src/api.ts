@@ -76,29 +76,48 @@ export const api = {
   createForm: (title: string, structure: FormField[]) => request<Form>('/forms/', { method: 'POST', body: JSON.stringify({ title, structure, organization_id: crypto.randomUUID(), is_active: true }) }),
   submissions: (formId: string, skip = 0) => request<SubmissionResponse>(`/analytics/submissions/${formId}?skip=${skip}`),
   submissionStatus: (formId: string) => request<{ has_submitted: boolean; is_active: boolean }>(`/submissions/forms/${formId}/my-status`),
-  subscribeToFormUpdates: (formId: string, onUpdate: () => void) => {
-    const stream = new EventSource(`${API_URL}/analytics/forms/${formId}/events`, { withCredentials: true })
-    stream.addEventListener('new_submission', onUpdate)
-    stream.addEventListener('submission_updated', onUpdate)
-    return () => stream.close()
-  },
-  downloadCsv: async (formId: string) => {
-    const response = await fetch(`${API_URL}/exports/forms/${formId}.csv`, { credentials: 'include' })
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail ?? 'Could not export submissions.')
-    const url = URL.createObjectURL(await response.blob())
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `form-${formId}-submissions.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-  },
+ subscribeToFormUpdates: (formId: string, onUpdate: () => void) => {
+  const token = tokenStore.get()
+  const url = `${API_URL}/analytics/forms/${formId}/events${token ? `?token=${token}` : ''}`
+  const stream = new EventSource(url)  // remove withCredentials: true
+  stream.addEventListener('new_submission', onUpdate)
+  stream.addEventListener('submission_updated', onUpdate)
+  return () => stream.close()
+},
+downloadCsv: async (formId: string) => {
+  const token = tokenStore.get()
+  const response = await fetch(`${API_URL}/exports/forms/${formId}.csv`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+    // remove credentials: 'include'
+  })
+  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail ?? 'Could not export submissions.')
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `form-${formId}-submissions.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+},
   submit: (form_id: string, answers: Record<string, unknown>) => request<Submission>('/submissions/', { method: 'POST', body: JSON.stringify({ form_id, answers }) }),
   upload: async (submissionId: string, fieldId: string | File, maybeFile?: File) => {
-    const file = fieldId instanceof File ? fieldId : maybeFile!
-    const resolvedFieldId = typeof fieldId === 'string' ? fieldId : 'attachment'
-    const body = new FormData(); body.append('file', file); body.append('field_id', resolvedFieldId)
-    const response = await fetch(`${API_URL}/files/upload/${submissionId}`, { method: 'POST', credentials: 'include', body })
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail ?? 'Upload failed.')
-    return response.json() as Promise<{ message: string; file_id: string }>
-  },
+  const file = fieldId instanceof File ? fieldId : maybeFile!
+  const resolvedFieldId = typeof fieldId === 'string' ? fieldId : 'attachment'
+  const token = tokenStore.get()
+  const body = new FormData()
+  body.append('file', file)
+  body.append('field_id', resolvedFieldId)
+  const response = await fetch(`${API_URL}/files/upload/${submissionId}`, {
+    method: 'POST',
+    // remove credentials: 'include'
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      // don't add Content-Type here — fetch sets it automatically for FormData
+    },
+    body
+  })
+  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail ?? 'Upload failed.')
+  return response.json() as Promise<{ message: string; file_id: string }>
+},
 }
