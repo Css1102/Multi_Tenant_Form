@@ -1,6 +1,6 @@
 import asyncio
 import json
-
+import os
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select, func
@@ -9,11 +9,13 @@ from uuid import UUID
 from ..database import get_session
 from ..models import FormSubmission, Form, User
 from ..dependencies import get_current_user
-from ..redis_client import async_redis
+from ..redis_client import async_redis,sync_redis
+import jwt
+from fastapi import Query
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
-
-
+SECRET_KEY=os.getenv("SECRET_KEY")
+ALGORITHM=os.getenv("ALGORITHM")
 def _get_tenant_form(session: Session, form_id: UUID, current_user: User) -> Form:
     """Load a form only when it belongs to the authenticated tenant."""
     form = session.get(Form, form_id)
@@ -98,10 +100,29 @@ def get_form_summary(
 async def form_live_events(
     form_id: UUID,
     request: Request,
+    token:str=Query(None),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ):
     """Server-sent events for one authorized form's submission changes."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if sync_redis.exists(f"blacklist:{token}"):
+        raise HTTPException(status_code=401, detail="Session revoked")
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        current_user = session.get(User, UUID(user_id))
+        if not current_user:
+            raise HTTPException(status_code=401, detail="User not found")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     _get_creator_form(session, form_id, current_user)
 
     async def event_generator():
