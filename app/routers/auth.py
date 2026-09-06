@@ -111,16 +111,13 @@ def login(
     )
     
     # --- NEW: Set the HttpOnly Cookie ---
-    response.set_cookie(
-        key="access_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        secure=True,       
-        samesite="none",    
-        max_age=1800
-    )    
-    return {"message": "Successfully logged in"}
-
+    access_token = create_access_token(data={"sub": str(user.id)})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "message": "Login successful"
+    }
 @router.post("/logout")
 def logout(request:Request,response: Response):
     token = request.cookies.get("access_token")
@@ -132,12 +129,12 @@ def logout(request:Request,response: Response):
         exp = payload.get("exp")
         
         if exp:
-            # Calculate remaining time to live (TTL) in seconds
+            # Calculate remaining time to live (TTL) in 
             now = datetime.now(timezone.utc).timestamp()
             ttl = int(exp - now)
             
             if ttl > 0:
-                # Save to Redis with an automatic expiration!
+                # Save to Redis with an automatic expiration!seconds
                 # Key format: blacklist:<token_string>
                 sync_redis.setex(f"blacklist:{token}", ttl, "revoked")
     except jwt.PyJWTError:

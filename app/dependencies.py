@@ -7,18 +7,19 @@ from .models import User
 from .auth import SECRET_KEY, ALGORITHM
 from .redis_client import sync_redis
 def get_current_user(
-    request: Request, # NEW: Grab the raw request to access cookies
+    request: Request,
     session: Session = Depends(get_session)
 ) -> User:
-    # --- NEW: Extract token from the cookie instead of the header ---
-    token_cookie = request.cookies.get("access_token")
+    auth_header = request.headers.get("Authorization")
     
-    if not token_cookie or not token_cookie.startswith("Bearer "):
+    if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    token = token_cookie.split(" ")[1]
+    token = auth_header.split(" ")[1]
+    
     if sync_redis.exists(f"blacklist:{token}"):
         raise HTTPException(status_code=401, detail="Session has been revoked. Please log in again.")
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")
@@ -36,5 +37,3 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token signature")
-
-

@@ -5,12 +5,12 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import type { FieldType, Form, FormField, Submission } from './types'
-
+import {tokenStore} from './lib/tokenStore'
 type View = 'dashboard' | 'forms' | 'builder' | 'submissions' | 'preview'
 const newField = (): FormField => ({ id: `field_${crypto.randomUUID().slice(0, 8)}`, label: 'Untitled question', type: 'text', validation: { required: false } })
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(false)
+  const [authenticated, setAuthenticated] = useState(() => tokenStore.exists())
   const [view, setView] = useState<View>('dashboard')
   const [forms, setForms] = useState<Form[]>([])
   const [activeForm, setActiveForm] = useState<Form | null>(null)
@@ -41,9 +41,9 @@ function App() {
         {message && <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><span>{message}</span><button onClick={() => setMessage(null)}><X size={16} /></button></div>}
         {view === 'dashboard' && <Dashboard forms={forms} loading={loading} currentUserId={currentUserId} onDelete={removeForm} onCreate={() => navigate('builder')} onOpen={(form, destination) => navigate(destination, form)} />}
         {view === 'forms' && <FormsList forms={forms} loading={loading} currentUserId={currentUserId} onDelete={removeForm} onCreate={() => navigate('builder')} onOpen={(form, destination) => navigate(destination, form)} />}
-        {view === 'builder' && <EnhancedFormBuilder onCancel={() => navigate(forms.length ? 'forms' : 'dashboard')} onCreated={created} />}
+        {view === 'builder' && <FormBuilder onCancel={() => navigate(forms.length ? 'forms' : 'dashboard')} onCreated={created} />}
         {view === 'submissions' && activeForm && <SubmissionList form={activeForm} onBack={() => navigate('forms')} />}
-        {view === 'preview' && activeForm && <ValidatedAttachmentFormPreview form={activeForm} onBack={() => navigate('forms')} />}
+        {view === 'preview' && activeForm && <FormPreview form={activeForm} onBack={() => navigate('forms')} />}
       </div>
     </main>
   </div>
@@ -111,7 +111,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { if (mode === 'signup') { await api.signup(email, password, organization); setMode('login'); setError('Account created. Sign in to continue.') } else { await api.login(email, password); onAuthenticated() } } catch (err) { setError(err instanceof Error ? err.message : 'Unable to continue.') } finally { setBusy(false) } }
   return <div className="grid min-h-screen bg-slate-950 lg:grid-cols-2"><section className="hidden bg-[radial-gradient(circle_at_15%_15%,#5b21b6,transparent_34%),radial-gradient(circle_at_82%_75%,#1d4ed8,transparent_32%)] p-12 text-white lg:flex lg:flex-col"><div className="flex items-center gap-3 text-xl font-bold"><div className="grid h-10 w-10 place-items-center rounded-xl bg-white/15"><Sparkles size={19} /></div>formcraft</div><div className="my-auto max-w-lg"><p className="text-sm font-medium text-violet-200">A simpler way to collect insight</p><h1 className="mt-4 text-5xl font-semibold leading-tight tracking-tight">Beautiful forms. Meaningful responses.</h1><p className="mt-5 max-w-md text-lg leading-relaxed text-slate-300">Create dynamic, secure forms for every team and workflow — all from one calm workspace.</p></div><p className="text-sm text-slate-400">Built for the teams that keep moving.</p></section><section className="grid place-items-center bg-slate-50 px-5 py-12"><div className="w-full max-w-md"><div className="mb-9 lg:hidden"><div className="flex items-center gap-2 text-xl font-bold"><Sparkles size={19} className="text-violet-600" /> formcraft</div></div><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Get started'}</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">{mode === 'login' ? 'Sign in to your workspace' : 'Create your workspace'}</h2><p className="mt-2 text-sm text-slate-500">{mode === 'login' ? 'Use your organization account to continue.' : 'Start building forms in just a few moments.'}</p><form onSubmit={event => void submit(event)} className="mt-8 space-y-5">{mode === 'signup' && <label className="block"><span className="label">Organization name</span><input required value={organization} onChange={event => setOrganization(event.target.value)} placeholder="Acme Inc." className="input mt-2" /></label>}<label className="block"><span className="label">Email address</span><input required type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@company.com" className="input mt-2" /></label><label className="block"><span className="label">Password</span><input required minLength={mode === 'signup' ? 8 : undefined} type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="••••••••" className="input mt-2" /></label>{error && <p className={`rounded-xl px-4 py-3 text-sm ${error.startsWith('Account created') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{error}</p>}<button disabled={busy} className="button-primary w-full justify-center disabled:opacity-60">{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <ChevronRight size={17} /></button></form><p className="mt-6 text-center text-sm text-slate-500">{mode === 'login' ? 'New to Formcraft?' : 'Already have an account?'} <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }} className="font-semibold text-violet-700 hover:text-violet-900">{mode === 'login' ? 'Create an account' : 'Sign in'}</button></p></div></section></div>
 }
-
 function EnhancedAuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login'); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [organization, setOrganization] = useState(''); const [invite, setInvite] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { if (mode === 'signup') { await api.signup(email, password, organization, invite); setMode('login'); setError('Account created. Sign in to continue.') } else { await api.login(email, password); onAuthenticated() } } catch (err) { setError(err instanceof Error ? err.message : 'Unable to continue.') } finally { setBusy(false) } }
